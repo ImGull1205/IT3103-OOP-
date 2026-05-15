@@ -1,0 +1,37 @@
+2.2 Working with method overloading
+Cả hai cho truyền nhiều đối tượng. Nhưng Array phải tạo mảng thủ công khi gọi hàm (new DigitalVideoDisc[]{...}). Với Varargs chỉ cần liệt kê các đối tượng cách nhau bởi dấu phẩy.
+
+2.3 Passing Parameter
+1.Tại sao sau khi call swap(jungleDVD, cinderellaDVD) , title của 2 DVD không đổi 
+- Chỉ là truyền địa chỉ của jungleDVD đó vào biến o1. Swap o1 và o2 chỉ là đổi chỗ bản sao địa chỉ trong phạm vi hàm swap. Khi kết thúc, hai biến toàn cục ở hàm main vẫn trỏ vào chỗ cũ.
+Tóm lại do o1 và o2 không phải 2 biến toàn cục.
+
+2.Tại sao sau khi call changeTitle thì title của 2 DVD đổi 
+- Do dvd.setTitle() chỉ tới biến toàn cục 
+
+2.6
+Kiểu trả về của phương thức toString() là string
+
+4.10 
+Chuyện gì sẽ xảy ra nếu tham số obj truyền vào không phải là một instance của Media?
+- Nếu đã dùng từ khóa instanceof để kiểm tra : Obj instanceof Media trả về false. Khối if (!(obj instanceof Media)) sẽ thỏa mãn trả về false. Chương trình run bình thường, báo rằng 2 đối tượng không bằng nhau vì khác loại.
+- Nếu ép kiểu trực tiếp (ví dụ: Media media = (Media) obj;): Lỗi ClassCastException và crash, vì ép kiểu một đối tượng thành một Media không được phép trong Java
+
+4.11 
+Vòng lặp for (Media m : mediae), biến tham chiếu m đang được khai báo dưới dạng kiểu cha là Media nhưng CompactDisc, DigitalVideoDisc và Book cấp phát bộ nhớ dưới dạng các lớp con .
+Khi run m.toString() chỉ biết m là kiểu Media nhưng, tại runtime , JVM sẽ tự động kiểm tra đối tượng m đang trỏ tới thuộc về class con nào nên thay vì gọi phương thức toString() mặc định của class Media (kiểu cha) thì sẽ gọi toString() tương ứng của CompactDisc, DigitalVideoDisc hay Book do bị ghi đè.
+
+4.12 Sử dụng Comparable interface
+- What class should implement the Comparable interface?
+Class Media nên implement Comparable<Media> vì tất cả các đối tượng trong Cart đều là Media, việc implement ở lớp cha sẽ giúp tất cả các lớp con (Book, CD, DVD) kế thừa và so sánh lẫn nhau.
+- In those classes, how should you implement the compareTo() method to reflect the ordering that we want?
+Ghi đè (override) phương thức compareTo(Media other) trong class Media. So sánh this.getTitle() và other.getTitle(). Khác nhau thì trả về kết quả đó giống nhau thì trả về Float.compare(other.getCost(), this.getCost()) để sort cost .
+
+- Can we have two ordering rules of the item (by title then cost and by cost then title) if we use this Comparable interface approach?
+Không. Comparable chỉ cho phép định nghĩa DUY NHẤT MỘT luật sắp xếp mặc định.
+
+- Suppose the DVDs has a different ordering rule from the other media types, that is by title, then decreasing length, then cost. How would you modify your code to allow this?
+Override method compareTo(Media other) bên trong class DigitalVideoDisc. 
+Trong hàm này, dùng  instanceof kiểm tra `if (other instanceof DigitalVideoDisc)`. 
+Nếu đúng là DVD thì ép kiểu về DigitalVideoDisc và lần lượt so sánh Title tới Length giảm dần -> Cost.
+Nếu không phải là DVD thì dùng return super.compareTo(other);
