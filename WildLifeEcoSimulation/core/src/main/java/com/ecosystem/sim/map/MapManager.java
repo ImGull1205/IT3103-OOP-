@@ -31,21 +31,99 @@ public class MapManager {
     }
 
     /**
-     * Kiểm tra xem một tọa độ có phải là vật cản không
-     * Dùng để logic Sói/Thỏ không đi xuyên tường
+     * Kiểm tra xem một ô gạch (tile) cụ thể có phải là vật cản không
      */
-    public boolean isObstacle(float worldX, float worldY) {
-        // Chuyển tọa độ thế giới sang tọa độ ô (tile)
-        int tileX = (int) (worldX / (16 * unitScale));
-        int tileY = (int) (worldY / (16 * unitScale));
+    public boolean isTileObstacle(int tileX, int tileY) {
+        if (tileX < 0 || tileX >= 50 || tileY < 0 || tileY >= 50) {
+            return true; // Biên bản đồ là vật cản
+        }
 
-        // Lấy lớp "Tile Layer 2" (nơi bạn vẽ ID 520)
+        // Lấy lớp "Tile Layer 2" (vật cản cây cối, đá vẽ sẵn trên map)
         TiledMapTileLayer obstacleLayer = (TiledMapTileLayer) map.getLayers().get("Tile Layer 2");
-        
         if (obstacleLayer != null && obstacleLayer.getCell(tileX, tileY) != null) {
-            return true; // Có vật cản ở đây
+            return true;
+        }
+
+        // Kiểm tra nước vẽ ở Tile Layer 1 (các con vật không lội nước)
+        TiledMapTileLayer layer1 = (TiledMapTileLayer) map.getLayers().get("Tile Layer 1");
+        if (layer1 != null) {
+            TiledMapTileLayer.Cell cell = layer1.getCell(tileX, tileY);
+            if (cell != null && cell.getTile() != null) {
+                int id = cell.getTile().getId();
+                // Đồng bộ toàn bộ các ID của nước ở hồ trung tâm và các góc viền
+                if (id == 60 || id == 3 || id == 4 || id == 5 || id == 59 || id == 61 || id == 115 || id == 116 || id == 117 ||
+                    id == 398 || id == 455 || id == 512 || id == 513 || id == 514 || id == 568 || id == 569 || id == 570 || id == 624 || id == 625 || id == 626) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Kiểm tra xem một vùng kích thước width x height có bị va chạm với vật cản nào không
+     * Tránh hoàn toàn lỗi sói/thỏ đi dính góc hoặc kẹt vào cây
+     */
+    public boolean isAreaObstacle(float worldX, float worldY, float width, float height) {
+        int minTileX = (int) (worldX / (16 * unitScale));
+        int maxTileX = (int) ((worldX + width - 0.1f) / (16 * unitScale));
+        int minTileY = (int) (worldY / (16 * unitScale));
+        int maxTileY = (int) ((worldY + height - 0.1f) / (16 * unitScale));
+
+        for (int tx = minTileX; tx <= maxTileX; tx++) {
+            for (int ty = minTileY; ty <= maxTileY; ty++) {
+                if (isTileObstacle(tx, ty)) {
+                    return true;
+                }
+            }
         }
         return false;
+    }
+
+    /**
+     * Kiểm tra xem một ô gạch có phải là vật cản không, bỏ qua kiểm tra nước
+     */
+    public boolean isTileObstacleIgnoreWater(int tileX, int tileY) {
+        if (tileX < 0 || tileX >= 50 || tileY < 0 || tileY >= 50) {
+            return true; // Biên bản đồ vẫn là vật cản
+        }
+
+        // Chỉ kiểm tra lớp "Tile Layer 2" (vật cản cây cối, đá vẽ sẵn trên map)
+        TiledMapTileLayer obstacleLayer = (TiledMapTileLayer) map.getLayers().get("Tile Layer 2");
+        if (obstacleLayer != null && obstacleLayer.getCell(tileX, tileY) != null) {
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * Kiểm tra xem một vùng có bị va chạm vật cản không, bỏ qua kiểm tra nước
+     */
+    public boolean isAreaObstacleIgnoreWater(float worldX, float worldY, float width, float height) {
+        int minTileX = (int) (worldX / (16 * unitScale));
+        int maxTileX = (int) ((worldX + width - 0.1f) / (16 * unitScale));
+        int minTileY = (int) (worldY / (16 * unitScale));
+        int maxTileY = (int) ((worldY + height - 0.1f) / (16 * unitScale));
+
+        for (int tx = minTileX; tx <= maxTileX; tx++) {
+            for (int ty = minTileY; ty <= maxTileY; ty++) {
+                if (isTileObstacleIgnoreWater(tx, ty)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Kiểm tra xem một tọa độ có phải là vật cản không (tương thích ngược)
+     */
+    public boolean isObstacle(float worldX, float worldY) {
+        int tileX = (int) (worldX / (16 * unitScale));
+        int tileY = (int) (worldY / (16 * unitScale));
+        return isTileObstacle(tileX, tileY);
     }
 
     /**
@@ -60,8 +138,9 @@ public class MapManager {
             TiledMapTileLayer.Cell cell = layer1.getCell(tileX, tileY);
             if (cell != null && cell.getTile() != null) {
                 int id = cell.getTile().getId();
-                // Các ID của nước theo yêu cầu (60, 3, 4, 5, 59, 61...) bao gồm cả viền bờ hồ phía Nam (115, 116, 117)
-                if (id == 60 || id == 3 || id == 4 || id == 5 || id == 59 || id == 61 || id == 115 || id == 116 || id == 117) {
+                // Các ID của nước theo yêu cầu bao gồm viền, lòng hồ trung tâm và bờ hồ
+                if (id == 60 || id == 3 || id == 4 || id == 5 || id == 59 || id == 61 || id == 115 || id == 116 || id == 117 ||
+                    id == 398 || id == 455 || id == 512 || id == 513 || id == 514 || id == 568 || id == 569 || id == 570 || id == 624 || id == 625 || id == 626) {
                     return true;
                 }
             }
@@ -103,13 +182,18 @@ public class MapManager {
             return false;
         }
         
-        // Kiểm tra va chạm đa điểm ở 4 góc của thực thể để đảm bảo nằm trọn trên cỏ
+        // Kiểm tra va chạm toàn diện qua isAreaObstacle để ngăn chặn đè nước hoặc đè cây vẽ sẵn
+        if (isAreaObstacle(worldX, worldY, width, height)) {
+            return false;
+        }
+        
+        // Kiểm tra 4 góc của thực thể để đảm bảo nằm trọn trên đất cỏ
         float[] xs = {worldX, worldX + width};
         float[] ys = {worldY, worldY + height};
 
         for (float x : xs) {
             for (float y : ys) {
-                if (!isGrass(x, y) || isObstacle(x, y)) {
+                if (!isGrass(x, y)) {
                     return false;
                 }
             }

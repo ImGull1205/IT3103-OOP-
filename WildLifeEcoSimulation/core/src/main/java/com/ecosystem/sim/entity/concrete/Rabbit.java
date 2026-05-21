@@ -3,6 +3,7 @@ package com.ecosystem.sim.entity.concrete;
 import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.math.Vector2;
 import com.ecosystem.sim.entity.Animal;
+import com.ecosystem.sim.entity.Herbivore;
 import com.ecosystem.sim.entity.AnimalState;
 import com.ecosystem.sim.entity.behavior.IPrey;
 import com.ecosystem.sim.map.MapManager;
@@ -13,20 +14,20 @@ import com.ecosystem.sim.map.MapManager;
  * Có thể lách qua bụi rậm nhỏ mà sói không vào được
  * Màu sắc: Xanh lá
  */
-public class Rabbit extends Animal implements IPrey {
+public class Rabbit extends Herbivore implements IPrey {
     private float fleeSpeed;
     private float fleeDistance; // Khoảng cách tối thiểu từ kẻ thù
     private Animal threatDetected;
     
     public Rabbit(float x, float y, MapManager mapManager) {
         // Gọi constructor cha với màu xanh lá
-        super(x, y, new Color(0, 1, 0, 1), mapManager, 14, 14); // 16x16 pixels, GREEN
+        super(x, y, new Color(0, 1, 0, 1), mapManager, 12, 12); // 12x12 pixels, GREEN
         
         // Thuộc tính thỏ
         this.speed = 80f;           // Tốc độ bình thường
         this.fleeSpeed = 150f;      // Tốc độ chạy thoát
         this.bodySize = 1;          // Thỏ nhỏ - lách được qua bụi rậm
-        this.dominance = 10;        // Thấp nhất - phải nhường đường
+        this.dominance = 20;        // Uy quyền 20
         this.senseRadius = 150f;    // Tầm nhìn 150 pixels
         
         // Sinh lý thỏ
@@ -39,7 +40,7 @@ public class Rabbit extends Animal implements IPrey {
         
         // Thỏ ăn cỏ nên tiêu tốn ít năng lượng hơn sói
         this.hungerRate = 2f;
-        this.thirstRate = 3f;
+        this.thirstRate = 4f;
         
         this.fleeDistance = 200f;
         this.threatDetected = null;
@@ -61,18 +62,17 @@ public class Rabbit extends Animal implements IPrey {
     @Override
     protected void updateAIState(float deltaTime) {
         super.updateAIState(deltaTime);
-        specificBehavior(deltaTime);
     }
 
     @Override
     protected AnimalState makeDecision() {
         // ƯUTIEN: Nếu phát hiện được kẻ thù gần, chạy thoát
-        if (threatDetected != null && 
+        if (threatDetected != null && threatDetected.isAlive() &&
             position.dst(threatDetected.getPosition()) < fleeDistance) {
             return AnimalState.FLEEING;
         }
         
-        // Quy trình quyết định bình thường
+        // Quy trình quyết định bình thường (bao gồm kiểm tra đói ăn trong Herbivore)
         return super.makeDecision();
     }
 
@@ -110,15 +110,20 @@ public class Rabbit extends Animal implements IPrey {
 
     @Override
     public Animal detectThreat(java.util.List<Animal> potentialThreats) {
+        Animal closestThreat = null;
+        float minDistance = senseRadius;
+        
         for (Animal threat : potentialThreats) {
+            if (!threat.isAlive()) continue;
             float distance = position.dst(threat.getPosition());
             
-            // Phát hiện sói, hổ, hoặc bất kỳ ăn thịt nào
-            if (distance < senseRadius && threat.getDominance() > this.dominance) {
-                return threat;
+            // Phát hiện sói, hổ
+            if (distance < minDistance && threat.getDominance() > this.dominance) {
+                closestThreat = threat;
+                minDistance = distance;
             }
         }
-        return null;
+        return closestThreat;
     }
 
     @Override
@@ -137,8 +142,21 @@ public class Rabbit extends Animal implements IPrey {
     }
 
     @Override
+    public void cloneSelf() {
+        com.ecosystem.sim.util.EntityManager em = com.ecosystem.sim.util.EntityManager.getInstance();
+        if (em != null) {
+            em.spawnRabbit(position.x, position.y);
+        }
+    }
+
+    @Override
     public void specificBehavior(float deltaTime) {
-        // Thỏ tìm thức ăn từ cỏ trên bản đồ
-        // TODO: Integrate với tile-based food sources
+        super.specificBehavior(deltaTime);
+        
+        if (currentState == AnimalState.FLEEING && threatDetected != null && threatDetected.isAlive()) {
+            // Luôn di chuyển ngược hướng với kẻ thù gần nhất
+            Vector2 fleeDirection = new Vector2(position).sub(threatDetected.getPosition()).nor();
+            targetPosition.set(position).add(fleeDirection.scl(fleeDistance));
+        }
     }
 }

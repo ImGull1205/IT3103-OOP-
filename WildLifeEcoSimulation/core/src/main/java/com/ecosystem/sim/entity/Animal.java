@@ -6,6 +6,7 @@ import com.badlogic.gdx.math.MathUtils;
 import com.badlogic.gdx.math.Vector2;
 import com.badlogic.gdx.Gdx;
 import com.ecosystem.sim.map.MapManager;
+import com.ecosystem.sim.util.PathFinding;
 
 /**
  * Lớp cơ sở cho tất cả các loài động vật
@@ -36,6 +37,7 @@ public abstract class Animal extends Entity {
     protected float stateTimer;       // Thời gian ở trạng thái hiện tại
     protected Vector2 targetPosition; // Vị trí mục tiêu
     protected Animal targetAnimal;    // Con vật mục tiêu (con mồi hoặc kẻ thù)
+    protected boolean ignoreWater = false; // Có thể di chuyển xuyên qua nước hay không
     
     // === THAM SỐ SỐNG ===
     protected float maxHealth;
@@ -48,6 +50,16 @@ public abstract class Animal extends Entity {
     // === TOÁN THỜI GIAN ===
     protected float stateChangeTimer; // Timer để đổi trạng thái
     protected float decisionTimer;    // Timer để quyết định hành động mới
+
+    // === CHỐNG KẸT (ANTI-STUCK) ===
+    protected Vector2 lastPosition = new Vector2();
+    protected float stuckTimer;
+
+    // === PATHFINDING (A*) ===
+    protected java.util.List<Vector2> currentPath = new java.util.ArrayList<>();
+    protected int pathIndex = 0;
+    protected float pathRecalcTimer = 0f;
+    protected Vector2 pathTargetPos = new Vector2();
 
     public Animal(float x, float y, Color color, MapManager mapManager,
                   float width, float height) {
@@ -68,7 +80,7 @@ public abstract class Animal extends Entity {
         // Khởi tạo các tham số mặc định
         this.hungerRate = 1.5f;    // Tốc độ đói
         this.thirstRate = 2.0f;    // Tốc độ khát
-        this.healthDecayRate = 5f; // -5 máu/s nếu đói/khát kiệt quệ
+        this.healthDecayRate = 0.5f; // Giảm tốc độ mất health khi đói/khát kiệt quệ xuống 0.5f
         
         // Trạng thái AI - khởi chạy ở WANDERING để animals di chuyển ngay
         this.currentState = AnimalState.WANDERING;
@@ -77,6 +89,10 @@ public abstract class Animal extends Entity {
         this.targetPosition = new Vector2();
         this.stateChangeTimer = 0;
         this.decisionTimer = 0;
+        
+        // Khởi tạo biến chống kẹt
+        this.lastPosition = new Vector2(x, y);
+        this.stuckTimer = 0f;
         
         // Khởi tạo velocity ngẫu nhiên để tránh kẹt ở (0, 0)
         float randomAngle = com.badlogic.gdx.math.MathUtils.random(360);
@@ -99,6 +115,16 @@ public abstract class Animal extends Entity {
         this.targetAnimal = null;
         this.targetPosition.set(0, 0);
         
+        // Reset biến chống kẹt
+        this.lastPosition.set(x, y);
+        this.stuckTimer = 0f;
+        
+        // Reset pathfinding
+        this.currentPath.clear();
+        this.pathIndex = 0;
+        this.pathRecalcTimer = 0f;
+        this.pathTargetPos.set(0, 0);
+        
         float randomAngle = com.badlogic.gdx.math.MathUtils.random(360);
         velocity.set(1, 0).setAngleDeg(randomAngle);
     }
@@ -111,6 +137,10 @@ public abstract class Animal extends Entity {
         this.hydration = 0;
         this.currentState = AnimalState.IDLE;
         this.targetAnimal = null;
+        this.currentPath.clear();
+        this.pathIndex = 0;
+        this.pathRecalcTimer = 0f;
+        this.pathTargetPos.set(0, 0);
     }
 
     @Override
@@ -143,17 +173,11 @@ public abstract class Animal extends Entity {
      * Cập nhật các chỉ số sinh tồn: energy, hydration, health
      */
     protected void updateSurvivalStats(float deltaTime) {
-        energy -= hungerRate * deltaTime;
-        energy = Math.max(0, energy);
-        
-        hydration -= thirstRate * deltaTime;
-        hydration = Math.max(0, hydration);
-        
-        // Sức khỏe giảm nếu đói hoặc khát nghiêm trọng (dưới 20)
-        if (energy < 20) health -= healthDecayRate * deltaTime;
-        if (hydration < 20) health -= healthDecayRate * deltaTime;
-        
-        health = MathUtils.clamp(health, 0, maxHealth);
+        if (this.currentState != AnimalState.EATING) {
+            this.energy = AnimalBioLogic.calculateEnergy(this.energy, this.hungerRate, deltaTime);
+        }
+        this.hydration = AnimalBioLogic.calculateHydration(this.hydration, this.thirstRate, deltaTime);
+        this.health = AnimalBioLogic.calculateHealth(this.health, this.maxHealth, this.energy, this.hydration, this.healthDecayRate, deltaTime, this.currentState);
     }
 
     /**
@@ -185,8 +209,16 @@ public abstract class Animal extends Entity {
             if (stateTimer < 2.0f) return currentState; // Đang ăn/uống thì ăn nốt 2 giây
         }
         
-        // Tạm thời: Chỉ cho WANDERING để test movement
-        // TODO: Sau này mới thêm food finding logic
+        // Ưu tiên đi tìm nước nếu hydration < 50
+        if (hydration < 50f) {
+            return AnimalState.SEARCHING_WATER;
+        }
+        
+        // Ưu tiên đi tìm thức ăn nếu energy < 60
+        if (energy < 60f) {
+            return AnimalState.SEARCHING_FOOD;
+        }
+        
         return AnimalState.WANDERING;
     }
 
@@ -195,37 +227,117 @@ public abstract class Animal extends Entity {
     /**
      * Di chuyển động vật dựa trên trạng thái hiện tại
      */
+    /**
+     * Di chuyển động vật dựa trên trạng thái hiện tại bằng A*
+     */
     protected void move(float deltaTime) {
         Vector2 direction = new Vector2(0, 0);
+        boolean hasTarget = false;
+        Vector2 activeTarget = null;
         
         switch (currentState) {
-            case WANDERING:
-                direction = getWanderingDirection();
-                break;
             case SEARCHING_WATER:
-                direction = getSearchDirection(true);
+                activeTarget = com.ecosystem.sim.util.ResourceTracker.getInstance().findNearestWater(position);
+                if (activeTarget != null) {
+                    setTargetPosition(activeTarget);
+                    hasTarget = true;
+                    
+                    // Nếu đã đến gần hồ nước, tiến hành uống nước
+                    if (position.dst(activeTarget) < 24f) {
+                        drink(100f); // Uống nước hồi đầy 100% hydration
+                    }
+                } else {
+                    direction = getWanderingDirection();
+                }
                 break;
             case SEARCHING_FOOD:
-                direction = getSearchDirection(false);
+                if (targetPosition.len() > 0) {
+                    activeTarget = targetPosition;
+                    hasTarget = true;
+                } else {
+                    direction = getWanderingDirection();
+                }
                 break;
             case HUNTING:
-                if (targetAnimal != null) {
-                    direction = getDirectionToTarget(targetAnimal.getPosition());
+                if (targetAnimal != null && targetAnimal.isAlive()) {
+                    setTargetPosition(targetAnimal.getPosition());
+                    activeTarget = targetPosition;
+                    hasTarget = true;
+                } else {
+                    direction = getWanderingDirection();
                 }
                 break;
             case FLEEING:
-                if (targetAnimal != null) {
-                    direction = getDirectionToTarget(targetAnimal.getPosition()).scl(-1f); // Chạy ngược hướng
+                if (targetPosition.len() > 0) {
+                    activeTarget = targetPosition;
+                    hasTarget = true;
+                } else {
+                    direction = getWanderingDirection();
+                }
+                break;
+            case WANDERING:
+                if (currentPath.isEmpty() || pathIndex >= currentPath.size()) {
+                    Vector2 wanderTarget = findRandomWanderTarget();
+                    if (wanderTarget != null) {
+                        setTargetPosition(wanderTarget);
+                    }
+                }
+                if (targetPosition.len() > 0) {
+                    activeTarget = targetPosition;
+                    hasTarget = true;
+                } else {
+                    direction = getWanderingDirection();
                 }
                 break;
             case IDLE:
             case EATING:
             case DRINKING:
             case RESTING:
+            case REPRODUCING:
                 direction.set(0, 0);
+                currentPath.clear();
+                pathIndex = 0;
                 break;
             default:
                 break;
+        }
+        
+        // Quản lý và tính toán đường đi A*
+        if (hasTarget && activeTarget != null) {
+            pathRecalcTimer += deltaTime;
+            boolean needRecalc = currentPath.isEmpty() || 
+                                 (pathIndex >= currentPath.size()) ||
+                                 (activeTarget.dst(pathTargetPos) > 12f) ||
+                                 (pathRecalcTimer > 0.4f);
+            
+            if (needRecalc) {
+                pathRecalcTimer = 0f;
+                pathTargetPos.set(activeTarget);
+                currentPath = PathFinding.findAStarPath(position, activeTarget, mapManager, ignoreWater);
+                pathIndex = 0;
+            }
+            
+            // Đi dọc theo đường đi A* đã tìm
+            if (!currentPath.isEmpty() && pathIndex < currentPath.size()) {
+                Vector2 waypoint = currentPath.get(pathIndex);
+                
+                // Nếu đủ gần waypoint hiện tại, chuyển sang waypoint tiếp theo
+                float distToWaypoint = position.dst(waypoint);
+                if (distToWaypoint < 6f) {
+                    pathIndex++;
+                    if (pathIndex < currentPath.size()) {
+                        waypoint = currentPath.get(pathIndex);
+                    }
+                }
+                
+                if (pathIndex < currentPath.size()) {
+                    direction.set(waypoint).sub(position);
+                } else {
+                    direction.set(activeTarget).sub(position);
+                }
+            } else {
+                direction.set(activeTarget).sub(position);
+            }
         }
         
         if (direction.len() > 0) {
@@ -235,18 +347,52 @@ public abstract class Animal extends Entity {
             Vector2 newPos = new Vector2(position).add(direction);
             if (!isObstructed(newPos)) {
                 position.add(direction);
+                
+                // Anti-stuck check: nếu di chuyển được, reset stuck timer
+                float distMoved = position.dst(lastPosition);
+                if (distMoved > 0.1f) {
+                    stuckTimer = 0f;
+                } else {
+                    stuckTimer += deltaTime;
+                }
+                lastPosition.set(position);
             } else {
-                // Nếu va chạm với cây hoặc đá, đổi hướng ngẫu nhiên ngay
+                stuckTimer += deltaTime;
                 if (currentState == AnimalState.WANDERING) {
                     stateChangeTimer = 3.1f;
+                    currentPath.clear();
+                    pathIndex = 0;
                 }
             }
+            
+            // Xử lý chống kẹt: nếu bị kẹt tại chỗ quá 0.8 giây
+            if (stuckTimer > 0.8f) {
+                currentPath.clear();
+                pathIndex = 0;
+                
+                // Thử né theo một hướng ngẫu nhiên khác
+                float randomAngle = MathUtils.random(360);
+                Vector2 escapeDir = new Vector2(1, 0).setAngleDeg(randomAngle).scl(speed * deltaTime * 1.5f);
+                Vector2 escapePos = new Vector2(position).add(escapeDir);
+                
+                if (!isObstructed(escapePos)) {
+                    position.set(escapePos);
+                    stuckTimer = 0f;
+                } else {
+                    Vector2 emptySpot = PathFinding.findNearbyEmptySpot(position, mapManager, 24);
+                    if (emptySpot != null) {
+                        position.set(emptySpot);
+                    }
+                    stuckTimer = 0f;
+                }
+            }
+        } else {
+            stuckTimer = 0f;
         }
         
-        // Giới hạn animals trong bounds của map (800x800 = 50x50 tiles)
         clampPositionToMapBounds();
         
-        velocity.set(direction).scl(1f / deltaTime);
+        velocity.set(direction).scl(1f / (deltaTime > 0 ? deltaTime : 0.016f));
     }
 
     /**
@@ -297,11 +443,11 @@ public abstract class Animal extends Entity {
     }
 
     protected boolean isObstructed(Vector2 newPos) {
-        // Kiểm tra va chạm đa điểm dựa trên kích thước thực thể
-        return mapManager.isObstacle(newPos.x, newPos.y) ||
-               mapManager.isObstacle(newPos.x + width, newPos.y) ||
-               mapManager.isObstacle(newPos.x, newPos.y + height) ||
-               mapManager.isObstacle(newPos.x + width, newPos.y + height);
+        // Kiểm tra va chạm toàn diện qua kiểm tra đè ô gạch của mapManager
+        if (ignoreWater) {
+            return mapManager.isAreaObstacleIgnoreWater(newPos.x, newPos.y, width, height);
+        }
+        return mapManager.isAreaObstacle(newPos.x, newPos.y, width, height);
     }
 
     protected boolean shouldDie() {
@@ -310,6 +456,7 @@ public abstract class Animal extends Entity {
 
     public void eat(float foodValue) {
         energy = Math.min(maxEnergy, energy + foodValue);
+        health = maxHealth; // Hồi phục 100% health khi ăn
         currentState = AnimalState.EATING;
         stateTimer = 0;
     }
@@ -334,17 +481,71 @@ public abstract class Animal extends Entity {
 
     @Override
     public void render(ShapeRenderer shapeRenderer) {
-        if (isAlive) {
-            shapeRenderer.setColor(color);
-            // Vẽ hình tròn tại vị trí
-            shapeRenderer.circle(position.x + width / 2, position.y + height / 2, width / 2);
-        }
+        AnimalViewLogic.draw(shapeRenderer, position, width, height, color, isAlive);
     }
+
+    public void cloneSelf() {}
 
     public abstract void specificBehavior(float deltaTime);
 
+    /**
+     * Tìm kiếm gạch nước gần nhất trong tầm nhìn
+     */
+    protected Vector2 findClosestTileTypeTarget(String type) {
+        int startTileX = (int)(position.x / 16);
+        int startTileY = (int)(position.y / 16);
+        int radiusTiles = (int)(senseRadius / 16);
+        
+        float closestDist = Float.MAX_VALUE;
+        Vector2 closestTarget = null;
+        
+        for (int dx = -radiusTiles; dx <= radiusTiles; dx++) {
+            for (int dy = -radiusTiles; dy <= radiusTiles; dy++) {
+                int tx = startTileX + dx;
+                int ty = startTileY + dy;
+                
+                if (tx >= 0 && tx < 50 && ty >= 0 && ty < 50) {
+                    boolean match = false;
+                    if (type.equals("water")) {
+                        match = mapManager.isWater(tx * 16 + 8, ty * 16 + 8);
+                    }
+                    
+                    if (match) {
+                        float dist = position.dst(tx * 16 + 8, ty * 16 + 8);
+                        if (dist < closestDist) {
+                            closestDist = dist;
+                            closestTarget = new Vector2(tx * 16 + 8, ty * 16 + 8);
+                        }
+                    }
+                }
+            }
+        }
+        return closestTarget;
+    }
+
+    /**
+     * Chọn vị trí đích lang thang ngẫu nhiên và an toàn trên đất cỏ
+     */
+    protected Vector2 findRandomWanderTarget() {
+        int attempts = 0;
+        while (attempts < 20) {
+            float angle = MathUtils.random(360f);
+            float dist = MathUtils.random(60f, 150f);
+            Vector2 candidate = new Vector2(position).add(new Vector2(dist, 0).rotateDeg(angle));
+            if (candidate.x >= 0 && candidate.x < 800 && candidate.y >= 0 && candidate.y < 800) {
+                if (!mapManager.isAreaObstacle(candidate.x, candidate.y, width, height) &&
+                    mapManager.isGrass(candidate.x, candidate.y)) {
+                    return candidate;
+                }
+            }
+            attempts++;
+        }
+        return null;
+    }
+
     // ============= GETTERS & SETTERS =============
     public float getHealth() { return health; }
+    public float getMaxHealth() { return maxHealth; }
     public float getEnergy() { return energy; }
     public float getHydration() { return hydration; }
     public float getSpeed() { return speed; }
@@ -352,6 +553,7 @@ public abstract class Animal extends Entity {
     public int getDominance() { return dominance; }
     public float getSenseRadius() { return senseRadius; }
     public AnimalState getCurrentState() { return currentState; }
+    public void setCurrentState(AnimalState state) { this.currentState = state; this.stateTimer = 0f; }
     public Animal getTargetAnimal() { return targetAnimal; }
     public Vector2 getTargetPosition() { return targetPosition; }
 
@@ -360,4 +562,4 @@ public abstract class Animal extends Entity {
     public void setHealth(float value) { this.health = Math.min(maxHealth, value); }
     public void setEnergy(float value) { this.energy = Math.min(maxEnergy, value); }
     public void setHydration(float value) { this.hydration = Math.min(maxHydration, value); }
-} // Dấu đóng class chính xác nằm ở đây!
+} 

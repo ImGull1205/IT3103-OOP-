@@ -20,72 +20,100 @@ public class PathFinding {
      * @param maxDistance Khoảng cách tìm kiếm tối đa
      * @return Hướng di chuyển tiếp theo, hoặc Vector2(0,0) nếu không tìm thấy
      */
+    /**
+     * Tìm đường đến một loại tile mục tiêu sử dụng BFS đã tối ưu hóa (Không cấp phát String/Map, Zero-Allocation)
+     * @param startPos Vị trí bắt đầu (world coordinates)
+     * @param targetType Loại tile mục tiêu (ví dụ: "water")
+     * @param mapManager Manager bản đồ
+     * @param maxDistance Khoảng cách tìm kiếm tối đa
+     * @return Hướng di chuyển tiếp theo, hoặc Vector2(0,0) nếu không tìm thấy
+     */
     public static Vector2 findPathToTileType(Vector2 startPos, String targetType, 
                                              MapManager mapManager, float maxDistance) {
         int startTileX = (int)(startPos.x / TILE_SIZE);
         int startTileY = (int)(startPos.y / TILE_SIZE);
         
-        Queue<int[]> queue = new LinkedList<>();
-        Set<String> visited = new HashSet<>();
-        Map<String, int[]> parent = new HashMap<>();
+        // Đảm bảo nằm trong ranh giới bản đồ 50x50
+        startTileX = Math.max(0, Math.min(49, startTileX));
+        startTileY = Math.max(0, Math.min(49, startTileY));
         
-        queue.add(new int[]{startTileX, startTileY});
-        visited.add(startTileX + "," + startTileY);
-        parent.put(startTileX + "," + startTileY, null);
+        // Hàng đợi lưu trữ chỉ mục phẳng: index = y * 50 + x để tránh tạo object int[] mới
+        Queue<Integer> queue = new LinkedList<>();
+        boolean[] visited = new boolean[2500];
+        int[] parent = new int[2500];
+        Arrays.fill(parent, -1);
         
-        int[] targetTile = null;
+        int startIdx = startTileY * 50 + startTileX;
+        queue.add(startIdx);
+        visited[startIdx] = true;
+        
+        int targetIdx = -1;
         int maxTiles = (int)(maxDistance / TILE_SIZE);
         
-        // BFS
+        // Hướng di chuyển (4 hướng thẳng, 4 hướng chéo)
+        int[] dx = {1, -1, 0, 0, 1, -1, 1, -1};
+        int[] dy = {0, 0, 1, -1, 1, 1, -1, -1};
+        
+        // BFS tìm kiếm
         while (!queue.isEmpty()) {
-            int[] current = queue.poll();
-            int x = current[0];
-            int y = current[1];
+            int currentIdx = queue.poll();
+            int cx = currentIdx % 50;
+            int cy = currentIdx / 50;
             
             // Kiểm tra xem tile này có phải là mục tiêu không
-            if (isTileType(x, y, targetType, mapManager)) {
-                targetTile = current;
+            if (isTileType(cx, cy, targetType, mapManager)) {
+                targetIdx = currentIdx;
                 break;
             }
             
             // Nếu vượt quá khoảng cách, bỏ qua
-            if (Math.abs(x - startTileX) + Math.abs(y - startTileY) > maxTiles) {
+            if (Math.abs(cx - startTileX) + Math.abs(cy - startTileY) > maxTiles) {
                 continue;
             }
             
-            // Thêm các tile kế cạnh
-            int[][] neighbors = {
-                {x + 1, y}, {x - 1, y}, {x, y + 1}, {x, y - 1},
-                {x + 1, y + 1}, {x - 1, y + 1}, {x + 1, y - 1}, {x - 1, y - 1}
-            };
-            
-            for (int[] neighbor : neighbors) {
-                String key = neighbor[0] + "," + neighbor[1];
+            for (int i = 0; i < 8; i++) {
+                int nx = cx + dx[i];
+                int ny = cy + dy[i];
                 
-                if (!visited.contains(key) && !mapManager.isObstacle(
-                    neighbor[0] * TILE_SIZE, neighbor[1] * TILE_SIZE)) {
-                    
-                    visited.add(key);
-                    parent.put(key, current);
-                    queue.add(neighbor);
+                if (nx >= 0 && nx < 50 && ny >= 0 && ny < 50) {
+                    int neighborIdx = ny * 50 + nx;
+                    if (!visited[neighborIdx] && !mapManager.isTileObstacle(nx, ny)) {
+                        
+                        // Chống cắt góc chéo (Corner Cutting) để tránh kẹt
+                        if (i >= 4) {
+                            int cx1 = cx + dx[i];
+                            int cy1 = cy;
+                            int cx2 = cx;
+                            int cy2 = cy + dy[i];
+                            if (mapManager.isTileObstacle(cx1, cy1) || mapManager.isTileObstacle(cx2, cy2)) {
+                                continue;
+                            }
+                        }
+                        
+                        visited[neighborIdx] = true;
+                        parent[neighborIdx] = currentIdx;
+                        queue.add(neighborIdx);
+                    }
                 }
             }
         }
         
-        // Nếu tìm thấy, trả về hướng
-        if (targetTile != null) {
-            // Truy ngược lại bước tiếp theo
-            int[] nextStep = targetTile;
-            int[] previous = parent.get(nextStep[0] + "," + nextStep[1]);
+        // Nếu tìm thấy, truy ngược lại bước tiếp theo
+        if (targetIdx != -1) {
+            int nextStepIdx = targetIdx;
+            int prevIdx = parent[nextStepIdx];
             
-            while (previous != null && previous[0] != startTileX && previous[1] != startTileY) {
-                nextStep = previous;
-                previous = parent.get(nextStep[0] + "," + nextStep[1]);
+            while (prevIdx != -1 && prevIdx != startIdx) {
+                nextStepIdx = prevIdx;
+                prevIdx = parent[nextStepIdx];
             }
             
+            int nX = nextStepIdx % 50;
+            int nY = nextStepIdx / 50;
+            
             Vector2 nextPos = new Vector2(
-                nextStep[0] * TILE_SIZE + TILE_SIZE / 2f,
-                nextStep[1] * TILE_SIZE + TILE_SIZE / 2f
+                nX * TILE_SIZE + TILE_SIZE / 2f,
+                nY * TILE_SIZE + TILE_SIZE / 2f
             );
             
             return nextPos.sub(startPos).nor();
@@ -98,13 +126,19 @@ public class PathFinding {
      * Kiểm tra xem một tile có phải loại mục tiêu không
      */
     private static boolean isTileType(int tileX, int tileY, String type, MapManager mapManager) {
-        // TODO: Triển khai dựa trên property của layer trong Tiled
-        // Ví dụ: Kiểm tra layer "Water", "Food", vv
+        float worldX = tileX * TILE_SIZE + TILE_SIZE / 2f;
+        float worldY = tileY * TILE_SIZE + TILE_SIZE / 2f;
         
-        // Tạm thời: Trả về false
+        if ("water".equals(type)) {
+            return mapManager.isWater(worldX, worldY);
+        }
         return false;
     }
 
+    /**
+     * Tìm vị trí trống gần nhất
+     * Dùng để dùng động vật nhường đường cho nhau
+     */
     /**
      * Tìm vị trí trống gần nhất
      * Dùng để dùng động vật nhường đường cho nhau
@@ -122,5 +156,146 @@ public class PathFinding {
         }
         
         return currentPos; // Không tìm thấy, ở lại chỗ cũ
+    }
+
+    /**
+     * Lớp Node hỗ trợ thuật toán tìm đường A*
+     */
+    private static class AStarNode implements Comparable<AStarNode> {
+        int x, y;
+        float g; // Chi phí từ điểm bắt đầu
+        float h; // Chi phí ước lượng tới điểm đích (Heuristic)
+        float f; // Tổng chi phí (g + h)
+        AStarNode parent;
+
+        AStarNode(int x, int y, float g, float h, AStarNode parent) {
+            this.x = x;
+            this.y = y;
+            this.g = g;
+            this.h = h;
+            this.f = g + h;
+            this.parent = parent;
+        }
+
+        @Override
+        public int compareTo(AStarNode o) {
+            return Float.compare(this.f, o.f);
+        }
+    }
+
+    /**
+     * Tìm đường tối ưu từ điểm bắt đầu tới điểm đích bằng thuật toán A* (A-Star)
+     * Tránh đi xuyên qua góc tường hoặc chui vào bụi cây vẽ sẵn trong file .tmx
+     */
+    public static List<Vector2> findAStarPath(Vector2 startPos, Vector2 targetPos, MapManager mapManager) {
+        return findAStarPath(startPos, targetPos, mapManager, false);
+    }
+
+    /**
+     * Tìm đường tối ưu từ điểm bắt đầu tới điểm đích bằng thuật toán A* (A-Star), hỗ trợ tùy chọn lội nước
+     */
+    public static List<Vector2> findAStarPath(Vector2 startPos, Vector2 targetPos, MapManager mapManager, boolean ignoreWater) {
+        int startTileX = (int) (startPos.x / TILE_SIZE);
+        int startTileY = (int) (startPos.y / TILE_SIZE);
+        int targetTileX = (int) (targetPos.x / TILE_SIZE);
+        int targetTileY = (int) (targetPos.y / TILE_SIZE);
+
+        // Giới hạn trong kích thước bản đồ 50x50
+        startTileX = Math.max(0, Math.min(49, startTileX));
+        startTileY = Math.max(0, Math.min(49, startTileY));
+        targetTileX = Math.max(0, Math.min(49, targetTileX));
+        targetTileY = Math.max(0, Math.min(49, targetTileY));
+
+        List<Vector2> path = new ArrayList<>();
+
+        if (startTileX == targetTileX && startTileY == targetTileY) {
+            path.add(new Vector2(targetPos));
+            return path;
+        }
+
+        PriorityQueue<AStarNode> openSet = new PriorityQueue<>();
+        boolean[][] closedSet = new boolean[50][50];
+        float[][] gScores = new float[50][50];
+        for (int i = 0; i < 50; i++) {
+            Arrays.fill(gScores[i], Float.MAX_VALUE);
+        }
+
+        // Sử dụng Manhattan Distance làm heuristic
+        float startH = Math.abs(startTileX - targetTileX) + Math.abs(startTileY - targetTileY);
+        AStarNode startNode = new AStarNode(startTileX, startTileY, 0, startH, null);
+        openSet.add(startNode);
+        gScores[startTileX][startTileY] = 0;
+
+        AStarNode targetNode = null;
+        int maxIterations = 1000; // Giới hạn số lượt quét để tránh đơ game
+        int iterations = 0;
+
+        // 8 hướng di chuyển (4 hướng thẳng, 4 hướng chéo)
+        int[][] directions = {
+            {0, 1}, {0, -1}, {1, 0}, {-1, 0},     // Cardinal
+            {1, 1}, {-1, 1}, {1, -1}, {-1, -1}    // Diagonal
+        };
+
+        while (!openSet.isEmpty() && iterations++ < maxIterations) {
+            AStarNode current = openSet.poll();
+
+            if (closedSet[current.x][current.y]) continue;
+            closedSet[current.x][current.y] = true;
+
+            if (current.x == targetTileX && current.y == targetTileY) {
+                targetNode = current;
+                break;
+            }
+
+            for (int i = 0; i < directions.length; i++) {
+                int nx = current.x + directions[i][0];
+                int ny = current.y + directions[i][1];
+
+                if (nx < 0 || nx >= 50 || ny < 0 || ny >= 50) continue;
+                
+                boolean isObstacle = ignoreWater ? mapManager.isTileObstacleIgnoreWater(nx, ny) : mapManager.isTileObstacle(nx, ny);
+                if (isObstacle) continue;
+
+                // NGĂN CHẶN CẮT GÓC (Corner Cutting):
+                // Nếu đi chéo, góc kề kề 2 bên của hướng đi không được là vật cản
+                if (i >= 4) {
+                    int cx1 = current.x + directions[i][0];
+                    int cy1 = current.y;
+                    int cx2 = current.x;
+                    int cy2 = current.y + directions[i][1];
+                    
+                    boolean obs1 = ignoreWater ? mapManager.isTileObstacleIgnoreWater(cx1, cy1) : mapManager.isTileObstacle(cx1, cy1);
+                    boolean obs2 = ignoreWater ? mapManager.isTileObstacleIgnoreWater(cx2, cy2) : mapManager.isTileObstacle(cx2, cy2);
+                    if (obs1 || obs2) {
+                        continue; // Bỏ qua nếu có vật cản sát góc để tránh kẹt
+                    }
+                }
+
+                float weight = (i < 4) ? 1.0f : 1.414f;
+                float tentativeG = current.g + weight;
+
+                if (tentativeG < gScores[nx][ny]) {
+                    gScores[nx][ny] = tentativeG;
+                    float h = Math.abs(nx - targetTileX) + Math.abs(ny - targetTileY);
+                    AStarNode neighborNode = new AStarNode(nx, ny, tentativeG, h, current);
+                    openSet.add(neighborNode);
+                }
+            }
+        }
+
+        if (targetNode != null) {
+            AStarNode curr = targetNode;
+            while (curr != null) {
+                // Thêm tọa độ thế giới (tâm của ô tile 16x16)
+                path.add(0, new Vector2(curr.x * TILE_SIZE + TILE_SIZE / 2f, curr.y * TILE_SIZE + TILE_SIZE / 2f));
+                curr = curr.parent;
+            }
+
+            // Thay thế điểm cuối cùng của path bằng tọa độ đích chính xác
+            if (!path.isEmpty()) {
+                path.set(path.size() - 1, new Vector2(targetPos));
+            }
+        }
+        return path;
     }
 }

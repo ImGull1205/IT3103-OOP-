@@ -14,5 +14,6 @@ public enum AnimalState {
     EATING,              // Đang ăn
     DRINKING,            // Đang uống nước
     RESTING,             // Đang nghỉ ngơi để phục hồi
+    REPRODUCING,         // Đang sinh sản (nhân bản)
     DEAD                 // Chết
 }

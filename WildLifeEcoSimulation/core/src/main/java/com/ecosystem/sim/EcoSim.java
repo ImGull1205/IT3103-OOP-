@@ -3,22 +3,29 @@ package com.ecosystem.sim;
 import com.badlogic.gdx.ApplicationAdapter;
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.Input;
+import com.badlogic.gdx.InputMultiplexer;
 import com.badlogic.gdx.InputProcessor;
 import com.badlogic.gdx.graphics.GL20;
 import com.badlogic.gdx.graphics.OrthographicCamera;
+import com.badlogic.gdx.graphics.g2d.SpriteBatch;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
 import com.badlogic.gdx.math.Vector3;
 import com.ecosystem.sim.map.MapManager;
+import com.ecosystem.sim.ui.HUD;
 
 /**
- * {@link com.badlogic.gdx.ApplicationListener} implementation shared by all
- * platforms.
+ * Lớp điều phối game chính của LibGDX.
  */
 public class EcoSim extends ApplicationAdapter implements InputProcessor {
     private OrthographicCamera camera;
     private MapManager mapManager;
     private ShapeRenderer shapeRenderer;
     private com.ecosystem.sim.util.EntityManager entityManager;
+    
+    // Giao diện HUD và SpriteBatch
+    private SpriteBatch batch;
+    private HUD hud;
+
     // Camera dragging
     private int lastMouseX = 0;
     private int lastMouseY = 0;
@@ -26,16 +33,34 @@ public class EcoSim extends ApplicationAdapter implements InputProcessor {
     
     // Spawn qua thời gian thay vì một lúc
     private float spawnTimer = 0;
-    private float spawnInterval = 0.1f; // Spawn 1 entity mỗi 0.1 giây
-    private int rabbitCount = 0;
-    private int wolfCount = 0;
-    private int grassCount = 0;
-    private int treeCount = 0;
+    private float spawnInterval = 0.2f; // Spawn 1 entity mỗi 0.2 giây
     
-    private static final int MAX_RABBITS = 20;    // Giảm từ 50
-    private static final int MAX_WOLVES = 10;     // Giảm từ 36
-    private static final int MAX_GRASS = 30;      // Giảm từ 100
-    private static final int MAX_TREES = 2;
+    public static final int MAX_RABBITS = 80;
+    public static final int MAX_DEERS = 40;
+    public static final int MAX_ELEPHANTS = 10;
+    public static final int MAX_WOLVES = 12;
+    public static final int MAX_TIGERS = 6;
+
+    // Các giới hạn tối thiểu (dự trữ cho tương lai - hiện không dùng cho spawn)
+    // Có thể dùng sau này cho logic bảo vệ tuyệt chủng nâng cao
+    public static final int MIN_RABBITS = 20;
+    public static final int MIN_DEERS = 10;
+    public static final int MIN_ELEPHANTS = 5;
+    public static final int MIN_WOLVES = 6;
+    public static final int MIN_TIGERS = 3;
+
+    // Các hằng số giới hạn số lượng và xác suất mọc của Thực vật (Cỏ và Cây)
+    // Tỉ lệ Cỏ luôn gấp 9 lần Cây ở tất cả các mùa
+    public static final int MAX_GRASS_BREEDING = 540;
+    public static final int MAX_TREES_BREEDING = 60;
+    public static final float GRASS_SPAWN_CHANCE_BREEDING = 0.9f;
+    public static final float TREE_SPAWN_CHANCE_BREEDING = 0.1f;
+
+    public static final int MAX_GRASS_DROUGHT = 90;
+    public static final int MAX_TREES_DROUGHT = 10;
+    public static final float GRASS_SPAWN_CHANCE_DROUGHT = 0.45f;
+    public static final float TREE_SPAWN_CHANCE_DROUGHT = 0.05f;
+
 
     @Override
     public void create() {
@@ -55,7 +80,46 @@ public class EcoSim extends ApplicationAdapter implements InputProcessor {
         shapeRenderer = new ShapeRenderer();
         entityManager = new com.ecosystem.sim.util.EntityManager(mapManager);
         
-        Gdx.input.setInputProcessor(this);
+        // Khởi tạo HUD & SpriteBatch
+        batch = new SpriteBatch();
+        hud = new HUD(entityManager);
+        
+        // Thiết lập bộ đa xử lý sự kiện: Stage của HUD sẽ đón sự kiện click trước, nếu click không trúng UI thì chuyển sang EcoSim xử lý drag camera.
+        InputMultiplexer multiplexer = new InputMultiplexer();
+        multiplexer.addProcessor(hud.getStage());
+        multiplexer.addProcessor(this);
+        Gdx.input.setInputProcessor(multiplexer);
+
+        // --- KHỞI TẠO QUẦN THỂ BAN ĐẦU ---
+        for (int i = 0; i < 180; i++) {
+            com.badlogic.gdx.math.Vector2 pos = mapManager.findRandomSpawnLocation();
+            entityManager.spawnGrass(pos.x, pos.y);
+        }
+        for (int i = 0; i < 20; i++) {
+            com.badlogic.gdx.math.Vector2 pos = mapManager.findRandomSpawnLocation();
+            entityManager.spawnTree(pos.x, pos.y);
+        }
+        for (int i = 0; i < MAX_RABBITS; i++) {
+            com.badlogic.gdx.math.Vector2 pos = mapManager.findRandomSpawnLocation(12, 12);
+            entityManager.spawnRabbit(pos.x, pos.y);
+        }
+        for (int i = 0; i < MAX_DEERS; i++) {
+            com.badlogic.gdx.math.Vector2 pos = mapManager.findRandomSpawnLocation(12, 12);
+            entityManager.spawnDeer(pos.x, pos.y);
+        }
+        for (int i = 0; i < MAX_ELEPHANTS; i++) {
+            com.badlogic.gdx.math.Vector2 pos = mapManager.findRandomSpawnLocation(12, 12);
+            entityManager.spawnElephant(pos.x, pos.y);
+        }
+        // 3. Động vật ăn thịt (~50% của MAX)
+        for (int i = 0; i < MAX_WOLVES; i++) {
+            com.badlogic.gdx.math.Vector2 pos = mapManager.findRandomSpawnLocation(12, 12);
+            entityManager.spawnWolf(pos.x, pos.y);
+        }
+        for (int i = 0; i < MAX_TIGERS; i++) {
+            com.badlogic.gdx.math.Vector2 pos = mapManager.findRandomSpawnLocation(12, 12);
+            entityManager.spawnTiger(pos.x, pos.y);
+        }
     }
 
     @Override
@@ -71,31 +135,64 @@ public class EcoSim extends ApplicationAdapter implements InputProcessor {
 
         float deltaTime = Gdx.graphics.getDeltaTime();
         
+        // Lấy giới hạn tối đa và tỉ lệ mọc theo mùa
+        int maxGrass = MAX_GRASS_BREEDING;
+        int maxTrees = MAX_TREES_BREEDING;
+        float grassSpawnChance = GRASS_SPAWN_CHANCE_BREEDING;
+        float treeSpawnChance = TREE_SPAWN_CHANCE_BREEDING;
+        
+        if (com.ecosystem.sim.util.EntityManager.getCurrentSeason() == com.ecosystem.sim.util.Season.DROUGHT) {
+            maxGrass = MAX_GRASS_DROUGHT;
+            maxTrees = MAX_TREES_DROUGHT;
+            grassSpawnChance = GRASS_SPAWN_CHANCE_DROUGHT;
+            treeSpawnChance = TREE_SPAWN_CHANCE_DROUGHT;
+        }
+        
         // Time-sliced Spawning
         spawnTimer += deltaTime;
         if (spawnTimer >= spawnInterval) {
             spawnTimer = 0;
             
-            // Spawn vài con mỗi frame nếu chưa đủ
-            if (rabbitCount < MAX_RABBITS) {
-                com.badlogic.gdx.math.Vector2 pos = mapManager.findRandomSpawnLocation();
+            // Spawn động vật ăn cỏ (Rabbit) 
+            if (entityManager.getRabbitCount() < MIN_RABBITS) {
+                com.badlogic.gdx.math.Vector2 pos = mapManager.findRandomSpawnLocation(12, 12);
                 entityManager.spawnRabbit(pos.x, pos.y);
-                rabbitCount++;
             }
-            if (wolfCount < MAX_WOLVES) {
-                com.badlogic.gdx.math.Vector2 pos = mapManager.findRandomSpawnLocation();
+
+            // Spawn động vật ăn cỏ (Deer) 
+            if (entityManager.getDeerCount() < MIN_DEERS) {
+                com.badlogic.gdx.math.Vector2 pos = mapManager.findRandomSpawnLocation(12, 12);
+                entityManager.spawnDeer(pos.x, pos.y);
+            }
+
+            // Spawn động vật ăn cỏ (Elephant) 
+            if (entityManager.getElephantCount() < MIN_ELEPHANTS) {
+                com.badlogic.gdx.math.Vector2 pos = mapManager.findRandomSpawnLocation(12, 12);
+                entityManager.spawnElephant(pos.x, pos.y);
+            }
+            
+            // Spawn động vật ăn thịt (Wolf) 
+            if (entityManager.getWolfCount() < MIN_WOLVES) {
+                com.badlogic.gdx.math.Vector2 pos = mapManager.findRandomSpawnLocation(12, 12);
                 entityManager.spawnWolf(pos.x, pos.y);
-                wolfCount++;
             }
-            if (grassCount < MAX_GRASS) {
+
+            // Spawn động vật ăn thịt (Tiger) 
+            if (entityManager.getTigerCount() < MIN_TIGERS) {
+                com.badlogic.gdx.math.Vector2 pos = mapManager.findRandomSpawnLocation(12, 12);
+                entityManager.spawnTiger(pos.x, pos.y);
+            }
+            
+            // Spawn cỏ ngẫu nhiên liên tục theo điều kiện mùa
+            if (entityManager.getGrassCount() < maxGrass && com.badlogic.gdx.math.MathUtils.random() < grassSpawnChance) {
                 com.badlogic.gdx.math.Vector2 pos = mapManager.findRandomSpawnLocation();
                 entityManager.spawnGrass(pos.x, pos.y);
-                grassCount++;
             }
-            if (treeCount < MAX_TREES) {
+            
+            // Spawn cây ngẫu nhiên liên tục theo điều kiện mùa
+            if (entityManager.getTreeCount() < maxTrees && com.badlogic.gdx.math.MathUtils.random() < treeSpawnChance) {
                 com.badlogic.gdx.math.Vector2 pos = mapManager.findRandomSpawnLocation();
                 entityManager.spawnTree(pos.x, pos.y);
-                treeCount++;
             }
         }
         
@@ -112,6 +209,11 @@ public class EcoSim extends ApplicationAdapter implements InputProcessor {
         entityManager.render(shapeRenderer);
         
         shapeRenderer.end();
+        
+        // --- VẼ HUD TRÊN CÙNG ---
+        if (hud != null) {
+            hud.render(batch);
+        }
     }
 
     /**
@@ -151,7 +253,24 @@ public class EcoSim extends ApplicationAdapter implements InputProcessor {
     public void dispose() {
         mapManager.dispose();
         shapeRenderer.dispose();
+        if (batch != null) {
+            batch.dispose();
+        }
+        if (hud != null) {
+            hud.dispose();
+        }
     }
+
+    @Override
+    public void resize(int width, int height) {
+        camera.viewportWidth = width;
+        camera.viewportHeight = height;
+        camera.update();
+        if (hud != null && hud.getStage() != null) {
+            hud.getStage().getViewport().update(width, height, true);
+        }
+    }
+
 
     // ===== InputProcessor Implementation =====
 
@@ -217,8 +336,7 @@ public class EcoSim extends ApplicationAdapter implements InputProcessor {
             float deltaX = currPos.x - lastPos.x;
             float deltaY = currPos.y - lastPos.y;
 
-            // Di chuyển camera ngược hướng với hướng kéo chuột để tạo cảm giác "cầm map kéo
-            // đi"
+            // Di chuyển camera ngược hướng với hướng kéo chuột để tạo cảm giác "cầm map kéo đi"
             camera.position.x -= deltaX;
             camera.position.y -= deltaY;
 

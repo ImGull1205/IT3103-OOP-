@@ -47,7 +47,7 @@ public abstract class Plant extends Entity {
         this.growthStage = GrowthStage.SEED;
         this.growthProgress = 0;
         this.growthRate = 20f; // 20%/s
-        this.nutritionalValue = 30f; // Giá trị nutrition mặc định
+        this.nutritionalValue = 80f; // Giá trị nutrition mặc định
         
         // Tham số sống
         this.maxAge = 120f; // 2 phút
@@ -73,7 +73,12 @@ public abstract class Plant extends Entity {
     public void update(float deltaTime) {
         if (!isAlive) return;
         
-        age += deltaTime;
+        float ageMultiplier = 1.0f;
+        if (com.ecosystem.sim.util.EntityManager.getCurrentSeason() == com.ecosystem.sim.util.Season.DROUGHT) {
+            ageMultiplier = 1.3f;
+        }
+        
+        age += deltaTime * ageMultiplier;
         
         // Cập nhật giai đoạn phát triển
         updateGrowth(deltaTime);
@@ -85,44 +90,17 @@ public abstract class Plant extends Entity {
     }
 
     /**
-     * Cập nhật tiến độ phát triển
+     * Cập nhật tiến độ phát triển sử dụng PlantBioLogic để tách biệt logic sinh học
      */
     protected void updateGrowth(float deltaTime) {
-        growthProgress += growthRate * deltaTime;
-        
-        // Chuyển sang giai đoạn tiếp theo
-        if (growthProgress >= 100) {
-            growthProgress = 0;
-            advanceGrowthStage();
-        }
-        
-        // Kiểm tra điều kiện héo
-        if (age >= wiltheringAge && growthStage != GrowthStage.WITHERED) {
-            growthStage = GrowthStage.WITHERED;
-            growthProgress = 0;
-            growthRate = -10f; // Héo nhanh hơn
-        }
-    }
-
-    /**
-     * Chuyển sang giai đoạn phát triển tiếp theo
-     */
-    protected void advanceGrowthStage() {
-        switch (growthStage) {
-            case SEED:
-                growthStage = GrowthStage.SPROUT;
-                break;
-            case SPROUT:
-                growthStage = GrowthStage.MATURE;
-                break;
-            case MATURE:
-                // Ở lại trưởng thành cho tới khi héo
-                growthProgress = 0;
-                growthRate = 0; // Không phát triển thêm
-                break;
-            case WITHERED:
-                die();
-                break;
+        PlantBioLogic.GrowthResult result = PlantBioLogic.updateGrowth(
+            deltaTime, age, wiltheringAge, growthStage, growthProgress, growthRate
+        );
+        this.growthStage = result.stage;
+        this.growthProgress = result.progress;
+        this.growthRate = result.rate;
+        if (result.shouldDie) {
+            die();
         }
     }
 
@@ -146,19 +124,7 @@ public abstract class Plant extends Entity {
 
     @Override
     public void render(ShapeRenderer shapeRenderer) {
-        if (isAlive) {
-            shapeRenderer.setColor(color);
-            float sizeMultiplier = growthStage.sizeMultiplier;
-            float actualWidth = width * sizeMultiplier;
-            float actualHeight = height * sizeMultiplier;
-            
-            // Căn giữa hình chữ nhật
-            float centerX = position.x + (width - actualWidth) / 2;
-            float centerY = position.y + (height - actualHeight) / 2;
-            
-            // Vẽ hình vuông
-            shapeRenderer.rect(centerX, centerY, actualWidth, actualHeight);
-        }
+        PlantViewLogic.draw(shapeRenderer, position, width, height, color, growthStage, isAlive);
     }
 
     /**
