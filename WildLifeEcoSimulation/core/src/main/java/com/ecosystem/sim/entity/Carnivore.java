@@ -50,7 +50,7 @@ public abstract class Carnivore extends Animal implements IPredator {
             
             // Năng lượng trên 60 mới được sinh sản (khắt khe vừa phải, tính đến sụt năng lượng khi ăn)
             if (energy >= 40) {
-                energy -= 20; // Tiêu hao năng lượng cho việc sinh sản
+                energy -= 10; // Tiêu hao năng lượng cho việc sinh sản
                 return AnimalState.REPRODUCING;
             }
         }

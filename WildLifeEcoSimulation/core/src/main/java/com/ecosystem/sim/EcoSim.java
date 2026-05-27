@@ -89,6 +89,8 @@ public class EcoSim extends ApplicationAdapter implements InputProcessor {
         multiplexer.addProcessor(hud.getStage());
         multiplexer.addProcessor(this);
         Gdx.input.setInputProcessor(multiplexer);
+        
+        com.ecosystem.sim.util.SoundManager.init();
 
         // --- KHỞI TẠO QUẦN THỂ BAN ĐẦU ---
         for (int i = 0; i < 180; i++) {
@@ -259,6 +261,7 @@ public class EcoSim extends ApplicationAdapter implements InputProcessor {
         if (hud != null) {
             hud.dispose();
         }
+        com.ecosystem.sim.util.SoundManager.dispose();
     }
 
     @Override

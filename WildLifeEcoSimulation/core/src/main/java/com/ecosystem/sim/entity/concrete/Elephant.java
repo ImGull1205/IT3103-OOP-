@@ -1,38 +1,25 @@
 package com.ecosystem.sim.entity.concrete;
-
 import com.badlogic.gdx.graphics.Color;
 import com.ecosystem.sim.entity.Herbivore;
 import com.ecosystem.sim.map.MapManager;
 import com.ecosystem.sim.util.EntityManager;
 
-/**
- * Lớp Voi (Elephant) - Động vật ăn cỏ (kích thước 12x12)
- * Có Uy quyền cao nhất bản đồ (dominance = 100).
- * Có thể lội qua nước (ignoreWater = true).
- * Chỉ ăn cây to (ediblePlantType = Tree.class).
- * Màu sắc: Xám (Color.GRAY).
- */
-public class Elephant extends Herbivore {
-
+public class Elephant extends Herbivore {//Lớp Voi - Động vật ăn cỏ, màu sắc: Xám
     public Elephant(float x, float y, MapManager mapManager) {
         super(x, y, Color.GRAY, mapManager, 12, 12);
-        
-        // Thuộc tính vật lý voi
-        this.speed = 50f;            // Di chuyển chậm rãi
-        this.bodySize = 4;           // Voi to lớn
-        this.dominance = 100;        // Uy quyền tuyệt đối
-        this.senseRadius = 150f;     // Tầm nhìn
-        this.ignoreWater = true;     // Lội nước thoải mái
-        this.ediblePlantType = Tree.class; // Chỉ ăn cây
-        
-        // Sinh lý voi
+        // Thuộc tính 
+        this.speed = 50f;           
+        this.bodySize = 4;           
+        this.dominance = 100;        // Uy quyền cao nhất
+        this.senseRadius = 150f;     
+        this.ignoreWater = true;     // Lội được nước
+        this.ediblePlantType = Tree.class; // Chỉ ăn tree
         this.health = 150;
         this.maxHealth = 150;
         this.energy = 100;
         this.maxEnergy = 100;
         this.hydration = 100;
         this.maxHydration = 100;
-        
         this.hungerRate = 2.5f;
         this.thirstRate = 4.0f;     // Động vật ăn cỏ khát nhanh hơn ăn thịt
     }

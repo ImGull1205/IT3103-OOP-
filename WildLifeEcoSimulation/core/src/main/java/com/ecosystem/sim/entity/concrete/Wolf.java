@@ -10,6 +10,7 @@ import com.ecosystem.sim.util.EntityManager;
  * Màu sắc: Đỏ
  */
 public class Wolf extends Carnivore {
+    private float howlTimer = 0f;
     
     public Wolf(float x, float y, MapManager mapManager) {
         // Gọi constructor Carnivore với màu đỏ và kích thước 14x14
@@ -52,6 +53,14 @@ public class Wolf extends Carnivore {
 
     @Override
     public void specificBehavior(float deltaTime) {
-        // Có thể bổ sung hành vi theo bầy đàn (pack behavior) ở đây
+        if (currentState == com.ecosystem.sim.entity.AnimalState.EATING) {
+            howlTimer -= deltaTime;
+            if (howlTimer <= 0) {
+                com.ecosystem.sim.util.SoundManager.playWolfHunt();
+                howlTimer = 5.0f; // Chờ 5s trước khi phát âm thanh tiếp
+            }
+        } else {
+            howlTimer = 0f; // Reset khi không ăn
+        }
     }
 }
