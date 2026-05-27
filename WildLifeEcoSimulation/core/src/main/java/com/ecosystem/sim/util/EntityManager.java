@@ -11,8 +11,12 @@ import com.ecosystem.sim.entity.Entity;
 import com.ecosystem.sim.entity.Plant;
 import com.ecosystem.sim.entity.concrete.Rabbit;
 import com.ecosystem.sim.entity.concrete.Wolf;
+import com.ecosystem.sim.entity.concrete.Deer;
+import com.ecosystem.sim.entity.concrete.Tiger;
+import com.ecosystem.sim.entity.concrete.Elephant;
 import com.ecosystem.sim.entity.concrete.Grass;
 import com.ecosystem.sim.entity.concrete.Tree;
+import com.ecosystem.sim.EcoSim;
 import com.ecosystem.sim.entity.behavior.IPredator;
 import com.ecosystem.sim.entity.behavior.IPrey;
 import com.ecosystem.sim.map.MapManager;
@@ -36,9 +40,9 @@ public class EntityManager {
     private Pool<Wolf> wolfPool;
     private Pool<Grass> grassPool;
     private Pool<Tree> treePool;
-    private Pool<com.ecosystem.sim.entity.concrete.Deer> deerPool;
-    private Pool<com.ecosystem.sim.entity.concrete.Tiger> tigerPool;
-    private Pool<com.ecosystem.sim.entity.concrete.Elephant> elephantPool;
+    private Pool<Deer> deerPool;
+    private Pool<Tiger> tigerPool;
+    private Pool<Elephant> elephantPool;
     
     // Singleton Instance
     private static EntityManager instance;
@@ -58,8 +62,7 @@ public class EntityManager {
     public static void setAutoCycleEnabled(boolean enabled) { isAutoCycleEnabled = enabled; }
     public static float getSeasonTimeLeft() { return seasonTimeLeft; }
     
-    private static final float SPAWN_COOLDOWN = 5.0f; // Thời gian giữa các lần spawn
-    private float spawnTimer;
+
     
     public EntityManager(MapManager mapManager) {
         instance = this;
@@ -68,7 +71,7 @@ public class EntityManager {
         this.plants = new ArrayList<>();
         this.entitiesToAdd = new ArrayList<>();
         this.isUpdating = false;
-        this.spawnTimer = 0;
+
         this.mapManager = mapManager;
         this.zoneManager = new ZoneManager();
         
@@ -88,14 +91,14 @@ public class EntityManager {
         this.treePool = new Pool<Tree>() {
             @Override protected Tree newObject() { return new Tree(0, 0, mapManager); }
         };
-        this.deerPool = new Pool<com.ecosystem.sim.entity.concrete.Deer>() {
-            @Override protected com.ecosystem.sim.entity.concrete.Deer newObject() { return new com.ecosystem.sim.entity.concrete.Deer(0, 0, mapManager); }
+        this.deerPool = new Pool<Deer>() {
+            @Override protected Deer newObject() { return new Deer(0, 0, mapManager); }
         };
-        this.tigerPool = new Pool<com.ecosystem.sim.entity.concrete.Tiger>() {
-            @Override protected com.ecosystem.sim.entity.concrete.Tiger newObject() { return new com.ecosystem.sim.entity.concrete.Tiger(0, 0, mapManager); }
+        this.tigerPool = new Pool<Tiger>() {
+            @Override protected Tiger newObject() { return new Tiger(0, 0, mapManager); }
         };
-        this.elephantPool = new Pool<com.ecosystem.sim.entity.concrete.Elephant>() {
-            @Override protected com.ecosystem.sim.entity.concrete.Elephant newObject() { return new com.ecosystem.sim.entity.concrete.Elephant(0, 0, mapManager); }
+        this.elephantPool = new Pool<Elephant>() {
+            @Override protected Elephant newObject() { return new Elephant(0, 0, mapManager); }
         };
     }
 
@@ -116,22 +119,22 @@ public class EntityManager {
         return wolf;
     }
 
-    public com.ecosystem.sim.entity.concrete.Deer spawnDeer(float x, float y) {
-        com.ecosystem.sim.entity.concrete.Deer deer = deerPool.obtain();
+    public Deer spawnDeer(float x, float y) {
+        Deer deer = deerPool.obtain();
         deer.init(x, y);
         addEntity(deer);
         return deer;
     }
 
-    public com.ecosystem.sim.entity.concrete.Tiger spawnTiger(float x, float y) {
-        com.ecosystem.sim.entity.concrete.Tiger tiger = tigerPool.obtain();
+    public Tiger spawnTiger(float x, float y) {
+        Tiger tiger = tigerPool.obtain();
         tiger.init(x, y);
         addEntity(tiger);
         return tiger;
     }
 
-    public com.ecosystem.sim.entity.concrete.Elephant spawnElephant(float x, float y) {
-        com.ecosystem.sim.entity.concrete.Elephant elephant = elephantPool.obtain();
+    public Elephant spawnElephant(float x, float y) {
+        Elephant elephant = elephantPool.obtain();
         elephant.init(x, y);
         addEntity(elephant);
         return elephant;
@@ -156,27 +159,21 @@ public class EntityManager {
      */
     public void addEntity(Entity entity) {
         // Kiểm tra giới hạn số lượng cá thể tối đa trước khi thêm để tránh bùng nổ dân số khi tự nhân bản
-        if (entity instanceof com.ecosystem.sim.entity.concrete.Elephant) {
-            if (getElephantCount() >= com.ecosystem.sim.EcoSim.MAX_ELEPHANTS) return;
-        } else if (entity instanceof com.ecosystem.sim.entity.concrete.Tiger) {
-            if (getTigerCount() >= com.ecosystem.sim.EcoSim.MAX_TIGERS) return;
+        if (entity instanceof Elephant) {
+            if (getElephantCount() >= EcoSim.MAX_ELEPHANTS) return;
+        } else if (entity instanceof Tiger) {
+            if (getTigerCount() >= EcoSim.MAX_TIGERS) return;
         } else if (entity instanceof Wolf) {
-            if (getWolfCount() >= com.ecosystem.sim.EcoSim.MAX_WOLVES) return;
-        } else if (entity instanceof com.ecosystem.sim.entity.concrete.Deer) {
-            if (getDeerCount() >= com.ecosystem.sim.EcoSim.MAX_DEERS) return;
+            if (getWolfCount() >= EcoSim.MAX_WOLVES) return;
+        } else if (entity instanceof Deer) {
+            if (getDeerCount() >= EcoSim.MAX_DEERS) return;
         } else if (entity instanceof Rabbit) {
-            if (getRabbitCount() >= com.ecosystem.sim.EcoSim.MAX_RABBITS) return;
-        } else if (entity instanceof com.ecosystem.sim.entity.concrete.Grass) {
-            int maxGrass = com.ecosystem.sim.EcoSim.MAX_GRASS_BREEDING;
-            if (currentSeason == Season.DROUGHT) {
-                maxGrass = com.ecosystem.sim.EcoSim.MAX_GRASS_DROUGHT;
-            }
+            if (getRabbitCount() >= EcoSim.MAX_RABBITS) return;
+        } else if (entity instanceof Grass) {
+            int maxGrass = currentSeason == Season.DROUGHT ? EcoSim.MAX_GRASS_DROUGHT : EcoSim.MAX_GRASS_BREEDING;
             if (getGrassCount() >= maxGrass) return;
-        } else if (entity instanceof com.ecosystem.sim.entity.concrete.Tree) {
-            int maxTrees = com.ecosystem.sim.EcoSim.MAX_TREES_BREEDING;
-            if (currentSeason == Season.DROUGHT) {
-                maxTrees = com.ecosystem.sim.EcoSim.MAX_TREES_DROUGHT;
-            }
+        } else if (entity instanceof Tree) {
+            int maxTrees = currentSeason == Season.DROUGHT ? EcoSim.MAX_TREES_DROUGHT : EcoSim.MAX_TREES_BREEDING;
             if (getTreeCount() >= maxTrees) return;
         }
 
@@ -266,9 +263,9 @@ public class EntityManager {
                 
                 if (e instanceof Rabbit) rabbitPool.free((Rabbit) e);
                 else if (e instanceof Wolf) wolfPool.free((Wolf) e);
-                else if (e instanceof com.ecosystem.sim.entity.concrete.Deer) deerPool.free((com.ecosystem.sim.entity.concrete.Deer) e);
-                else if (e instanceof com.ecosystem.sim.entity.concrete.Tiger) tigerPool.free((com.ecosystem.sim.entity.concrete.Tiger) e);
-                else if (e instanceof com.ecosystem.sim.entity.concrete.Elephant) elephantPool.free((com.ecosystem.sim.entity.concrete.Elephant) e);
+                else if (e instanceof Deer) deerPool.free((Deer) e);
+                else if (e instanceof Tiger) tigerPool.free((Tiger) e);
+                else if (e instanceof Elephant) elephantPool.free((Elephant) e);
                 else if (e instanceof Grass) grassPool.free((Grass) e);
                 else if (e instanceof Tree) treePool.free((Tree) e);
                 entities.remove(i);
@@ -277,8 +274,7 @@ public class EntityManager {
         animals.removeIf(a -> !a.isAlive());
         plants.removeIf(p -> !p.isAlive());
         
-        // Spawn động vật và thực vật mới (nếu cần)
-        updateSpawning(deltaTime);
+
     }
 
     /**
@@ -325,7 +321,7 @@ public class EntityManager {
             // Động vật ăn cỏ quét tìm thức ăn (cỏ thực thể)
             if (animal instanceof Herbivore && animal.getCurrentState() == AnimalState.SEARCHING_FOOD) {
                 Herbivore herbivore = (Herbivore) animal;
-                Plant food = herbivore.detectFood(nearbyPlants);
+                Plant food = herbivore.detectFood();
                 if (food != null) {
                     herbivore.setTargetFood(food);
                 }
@@ -407,17 +403,7 @@ public class EntityManager {
         }
     }
 
-    /**
-     * Spawn động vật và thực vật mới
-     */
-    private void updateSpawning(float deltaTime) {
-        spawnTimer += deltaTime;
-        
-        if (spawnTimer >= SPAWN_COOLDOWN) {
-            spawnTimer = 0;
-            // TODO: Logic sinh sản tự động nếu cần thiết
-        }
-    }
+
 
     /**
      * Vẽ tất cả thực thể
@@ -432,100 +418,24 @@ public class EntityManager {
 
     // ============= GETTERS =============
 
-    public List<Entity> getEntities() { return new ArrayList<>(entities); }
-    public List<Animal> getAnimals() { return new ArrayList<>(animals); }
-    public List<Plant> getPlants() { return new ArrayList<>(plants); }
-    
-    public int getAnimalCount() {
-        int count = animals.size();
-        for (Entity e : entitiesToAdd) {
-            if (e instanceof Animal) count++;
-        }
-        return count;
-    }
-    
-    public int getPlantCount() {
-        int count = plants.size();
-        for (Entity e : entitiesToAdd) {
-            if (e instanceof Plant) count++;
-        }
-        return count;
-    }
-
-    public int getRabbitCount() {
+    private int countByType(Class<?> type) {
         int count = 0;
-        for (Animal a : animals) {
-            if (a instanceof Rabbit && a.isAlive()) count++;
+        for (Entity e : entities) {
+            if (type.isInstance(e) && e.isAlive()) count++;
         }
         for (Entity e : entitiesToAdd) {
-            if (e instanceof Rabbit && e.isAlive()) count++;
+            if (type.isInstance(e) && e.isAlive()) count++;
         }
         return count;
     }
     
-    public int getWolfCount() {
-        int count = 0;
-        for (Animal a : animals) {
-            if (a instanceof Wolf && a.isAlive()) count++;
-        }
-        for (Entity e : entitiesToAdd) {
-            if (e instanceof Wolf && e.isAlive()) count++;
-        }
-        return count;
-    }
-
-    public int getDeerCount() {
-        int count = 0;
-        for (Animal a : animals) {
-            if (a instanceof com.ecosystem.sim.entity.concrete.Deer && a.isAlive()) count++;
-        }
-        for (Entity e : entitiesToAdd) {
-            if (e instanceof com.ecosystem.sim.entity.concrete.Deer && e.isAlive()) count++;
-        }
-        return count;
-    }
-
-    public int getTigerCount() {
-        int count = 0;
-        for (Animal a : animals) {
-            if (a instanceof com.ecosystem.sim.entity.concrete.Tiger && a.isAlive()) count++;
-        }
-        for (Entity e : entitiesToAdd) {
-            if (e instanceof com.ecosystem.sim.entity.concrete.Tiger && e.isAlive()) count++;
-        }
-        return count;
-    }
-
-    public int getElephantCount() {
-        int count = 0;
-        for (Animal a : animals) {
-            if (a instanceof com.ecosystem.sim.entity.concrete.Elephant && a.isAlive()) count++;
-        }
-        for (Entity e : entitiesToAdd) {
-            if (e instanceof com.ecosystem.sim.entity.concrete.Elephant && e.isAlive()) count++;
-        }
-        return count;
-    }
-    
-    public int getGrassCount() {
-        int count = 0;
-        for (Plant p : plants) {
-            if (p instanceof Grass && p.isAlive()) count++;
-        }
-        for (Entity e : entitiesToAdd) {
-            if (e instanceof Grass && e.isAlive()) count++;
-        }
-        return count;
-    }
-    
-    public int getTreeCount() {
-        int count = 0;
-        for (Plant p : plants) {
-            if (p instanceof Tree && p.isAlive()) count++;
-        }
-        for (Entity e : entitiesToAdd) {
-            if (e instanceof Tree && e.isAlive()) count++;
-        }
-        return count;
-    }
+    public int getAnimalCount() { return countByType(Animal.class); }
+    public int getPlantCount() { return countByType(Plant.class); }
+    public int getRabbitCount() { return countByType(Rabbit.class); }
+    public int getWolfCount() { return countByType(Wolf.class); }
+    public int getDeerCount() { return countByType(Deer.class); }
+    public int getTigerCount() { return countByType(Tiger.class); }
+    public int getElephantCount() { return countByType(Elephant.class); }
+    public int getGrassCount() { return countByType(Grass.class); }
+    public int getTreeCount() { return countByType(Tree.class); }
 }

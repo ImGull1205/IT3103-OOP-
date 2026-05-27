@@ -29,16 +29,11 @@ public class HUD {
     private TextButton btnSeason;
     private TextButton btnAuto;
     
-    // Màu sắc mặc định cho chữ
-    private static final float TEXT_COLOR_R = 1.0f;
-    private static final float TEXT_COLOR_G = 1.0f;
-    private static final float TEXT_COLOR_B = 1.0f;
-    private static final float TEXT_COLOR_A = 1.0f;
-    
+
     public HUD(EntityManager entityManager) {
         this.entityManager = entityManager;
         this.font = new BitmapFont();
-        this.font.setColor(TEXT_COLOR_R, TEXT_COLOR_G, TEXT_COLOR_B, TEXT_COLOR_A);
+        this.font.setColor(Color.WHITE);
         
         // Khởi tạo Scene2D Stage với ScreenViewport độc lập
         this.stage = new Stage(new ScreenViewport());

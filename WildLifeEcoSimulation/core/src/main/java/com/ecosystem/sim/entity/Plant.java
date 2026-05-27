@@ -3,6 +3,8 @@ package com.ecosystem.sim.entity;
 import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
 import com.ecosystem.sim.map.MapManager;
+import com.ecosystem.sim.util.EntityManager;
+import com.ecosystem.sim.util.Season;
 
 /**
  * Lớp cơ sở cho tất cả các loài thực vật
@@ -74,7 +76,7 @@ public abstract class Plant extends Entity {
         if (!isAlive) return;
         
         float ageMultiplier = 1.0f;
-        if (com.ecosystem.sim.util.EntityManager.getCurrentSeason() == com.ecosystem.sim.util.Season.DROUGHT) {
+        if (EntityManager.getCurrentSeason() == Season.DROUGHT) {
             ageMultiplier = 1.3f;
         }
         

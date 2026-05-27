@@ -4,6 +4,7 @@ import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.math.Vector2;
 import com.ecosystem.sim.entity.behavior.IPredator;
 import com.ecosystem.sim.map.MapManager;
+import com.ecosystem.sim.util.ResourceTracker;
 
 import java.util.List;
 
@@ -34,11 +35,7 @@ public abstract class Carnivore extends Animal implements IPredator {
         this.preyDetected = null;
     }
 
-    @Override
-    protected void updateAIState(float deltaTime) {
-        super.updateAIState(deltaTime);
-        // specificBehavior(deltaTime) đã được lớp cha Animal.update gọi tự động
-    }
+
 
     @Override
     protected AnimalState makeDecision() {
@@ -53,7 +50,7 @@ public abstract class Carnivore extends Animal implements IPredator {
             
             // Năng lượng trên 60 mới được sinh sản (khắt khe vừa phải, tính đến sụt năng lượng khi ăn)
             if (energy >= 40) {
-                energy -= 20; // Tiêu hao năng lượng cho việc sinh sản
+                energy -= 10; // Tiêu hao năng lượng cho việc sinh sản
                 return AnimalState.REPRODUCING;
             }
         }
@@ -131,7 +128,7 @@ public abstract class Carnivore extends Animal implements IPredator {
     @Override
     public Animal detectPrey(List<Entity> potentialPrey) {
         // Tối ưu hóa Zero-Allocation thông qua ResourceTracker
-        return com.ecosystem.sim.util.ResourceTracker.getInstance().findNearestPrey(position, huntingRange, this.dominance);
+        return ResourceTracker.getInstance().findNearestPrey(position, huntingRange, this.dominance);
     }
 
     @Override
@@ -139,14 +136,6 @@ public abstract class Carnivore extends Animal implements IPredator {
         return huntingRange;
     }
 
-    @Override
-    protected Vector2 getSearchDirection(boolean searchWater) {
-        if (!searchWater) {
-            // Thú ăn thịt tìm con mồi bằng cách tuần tra lang thang
-            return getWanderingDirection();
-        }
-        return super.getSearchDirection(searchWater);
-    }
 
     @Override
     protected void onStateChanged(AnimalState oldState, AnimalState newState) {
