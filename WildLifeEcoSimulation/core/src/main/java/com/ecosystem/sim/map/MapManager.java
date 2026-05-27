@@ -16,8 +16,12 @@ public class MapManager {
     private float cameraZoom = 1.0f; // Zoom level của camera
     private float minZoom = 0.5f;
     private float maxZoom = 3.0f;
-    private float mapWidth = 800f;  // 50 tiles × 16px
-    private float mapHeight = 800f; // 50 tiles × 16px
+    private static final float mapWidth = 800f;  // 50 tiles × 16px
+    private static final float mapHeight = 800f; // 50 tiles × 16px
+
+    private static final java.util.Set<Integer> WATER_TILE_IDS = new java.util.HashSet<>(java.util.Arrays.asList(
+        3, 4, 5, 59, 60, 61, 115, 116, 117, 398, 455, 512, 513, 514, 568, 569, 570, 624, 625, 626
+    ));
 
     public MapManager(String mapPath, OrthographicCamera camera) {
         this.map = new TmxMapLoader().load(mapPath);
@@ -50,9 +54,7 @@ public class MapManager {
             TiledMapTileLayer.Cell cell = layer1.getCell(tileX, tileY);
             if (cell != null && cell.getTile() != null) {
                 int id = cell.getTile().getId();
-                // Đồng bộ toàn bộ các ID của nước ở hồ trung tâm và các góc viền
-                if (id == 60 || id == 3 || id == 4 || id == 5 || id == 59 || id == 61 || id == 115 || id == 116 || id == 117 ||
-                    id == 398 || id == 455 || id == 512 || id == 513 || id == 514 || id == 568 || id == 569 || id == 570 || id == 624 || id == 625 || id == 626) {
+                if (WATER_TILE_IDS.contains(id)) {
                     return true;
                 }
             }
@@ -138,9 +140,7 @@ public class MapManager {
             TiledMapTileLayer.Cell cell = layer1.getCell(tileX, tileY);
             if (cell != null && cell.getTile() != null) {
                 int id = cell.getTile().getId();
-                // Các ID của nước theo yêu cầu bao gồm viền, lòng hồ trung tâm và bờ hồ
-                if (id == 60 || id == 3 || id == 4 || id == 5 || id == 59 || id == 61 || id == 115 || id == 116 || id == 117 ||
-                    id == 398 || id == 455 || id == 512 || id == 513 || id == 514 || id == 568 || id == 569 || id == 570 || id == 624 || id == 625 || id == 626) {
+                if (WATER_TILE_IDS.contains(id)) {
                     return true;
                 }
             }

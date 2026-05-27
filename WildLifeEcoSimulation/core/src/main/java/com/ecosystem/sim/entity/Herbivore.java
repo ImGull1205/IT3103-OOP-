@@ -4,7 +4,7 @@ import com.badlogic.gdx.graphics.Color;
 import com.badlogic.gdx.math.Vector2;
 import com.ecosystem.sim.entity.concrete.Grass;
 import com.ecosystem.sim.map.MapManager;
-import java.util.List;
+import com.ecosystem.sim.util.ResourceTracker;
 
 /**
  * Lớp trừu tượng trung gian cho các động vật ăn cỏ (Thỏ, Hươu...)
@@ -12,7 +12,12 @@ import java.util.List;
  */
 public abstract class Herbivore extends Animal {
     protected Plant foodDetected;
-    public Class<? extends Plant> ediblePlantType = com.ecosystem.sim.entity.concrete.Grass.class; // Phân hóa thực phẩm mặc định là cỏ
+    public Class<? extends Plant> ediblePlantType = Grass.class; // Phân hóa thực phẩm mặc định là cỏ
+    
+    // Thuộc tính chạy trốn (áp dụng cho con mồi)
+    protected float fleeSpeed;
+    protected float fleeDistance;
+    protected Animal threatDetected;
 
     public Herbivore(float x, float y, Color color, MapManager mapManager,
                      float width, float height) {
@@ -24,12 +29,14 @@ public abstract class Herbivore extends Animal {
     public void init(float x, float y) {
         super.init(x, y);
         this.foodDetected = null;
+        this.threatDetected = null;
     }
 
     @Override
     public void reset() {
         super.reset();
         this.foodDetected = null;
+        this.threatDetected = null;
     }
 
     @Override
@@ -38,10 +45,19 @@ public abstract class Herbivore extends Animal {
         if (oldState == AnimalState.SEARCHING_FOOD && newState != AnimalState.SEARCHING_FOOD) {
             foodDetected = null;
         }
+        if (oldState == AnimalState.FLEEING && newState != AnimalState.FLEEING) {
+            threatDetected = null;
+            targetAnimal = null;
+        }
     }
 
     @Override
     protected AnimalState makeDecision() {
+        if (threatDetected != null && threatDetected.isAlive() &&
+            position.dst(threatDetected.getPosition()) < fleeDistance) {
+            return AnimalState.FLEEING;
+        }
+
         // Đang uống nước thì uống nốt
         if (currentState == AnimalState.DRINKING) {
             if (stateTimer < 2.0f) return AnimalState.DRINKING;
@@ -75,8 +91,8 @@ public abstract class Herbivore extends Animal {
     /**
      * Tìm kiếm thực vật làm thức ăn qua ResourceTracker
      */
-    public Plant detectFood(List<Plant> potentialFood) {
-        return com.ecosystem.sim.util.ResourceTracker.getInstance().findNearestPlantFood(position, senseRadius, ediblePlantType);
+    public Plant detectFood() {
+        return ResourceTracker.getInstance().findNearestPlantFood(position, senseRadius, ediblePlantType);
     }
 
     public void setTargetFood(Plant food) {
@@ -107,6 +123,49 @@ public abstract class Herbivore extends Animal {
                 // Không tìm thấy thực thể thực vật thức ăn nào gần đó, chuyển sang lang thang tiếp
                 currentState = AnimalState.WANDERING;
             }
+        } else if (currentState == AnimalState.FLEEING && threatDetected != null && threatDetected.isAlive()) {
+            Vector2 fleeDirection = new Vector2(position).sub(threatDetected.getPosition()).nor();
+            targetPosition.set(position).add(fleeDirection.scl(fleeDistance));
         }
+    }
+
+    @Override
+    protected void move(float deltaTime) {
+        if (currentState == AnimalState.FLEEING) {
+            float tempSpeed = this.speed;
+            this.speed = fleeSpeed;
+            super.move(deltaTime);
+            this.speed = tempSpeed;
+        } else {
+            super.move(deltaTime);
+        }
+    }
+
+    public void flee(Animal predator) {
+        this.threatDetected = predator;
+        this.targetAnimal = predator;
+        this.currentState = AnimalState.FLEEING;
+        
+        Vector2 fleeDirection = new Vector2(position).sub(predator.getPosition()).nor();
+        targetPosition.set(position).add(fleeDirection.scl(fleeDistance));
+    }
+
+    public Animal detectThreat(java.util.List<Animal> potentialThreats) {
+        Animal closestThreat = null;
+        float minDistance = senseRadius;
+        
+        for (Animal threat : potentialThreats) {
+            if (!threat.isAlive()) continue;
+            float distance = position.dst(threat.getPosition());
+            if (distance < minDistance && threat.getDominance() > this.dominance) {
+                closestThreat = threat;
+                minDistance = distance;
+            }
+        }
+        return closestThreat;
+    }
+
+    public float getAwarenessRange() {
+        return senseRadius;
     }
 }

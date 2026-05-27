@@ -3,6 +3,7 @@ package com.ecosystem.sim.entity.concrete;
 import com.badlogic.gdx.graphics.Color;
 import com.ecosystem.sim.entity.Carnivore;
 import com.ecosystem.sim.map.MapManager;
+import com.ecosystem.sim.util.EntityManager;
 
 /**
  * Lớp Sói - Động vật ăn thịt, kế thừa Carnivore
@@ -43,7 +44,7 @@ public class Wolf extends Carnivore {
 
     @Override
     public void cloneSelf() {
-        com.ecosystem.sim.util.EntityManager em = com.ecosystem.sim.util.EntityManager.getInstance();
+        EntityManager em = EntityManager.getInstance();
         if (em != null) {
             em.spawnWolf(position.x, position.y);
         }

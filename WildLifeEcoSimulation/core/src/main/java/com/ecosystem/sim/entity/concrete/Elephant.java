@@ -3,6 +3,7 @@ package com.ecosystem.sim.entity.concrete;
 import com.badlogic.gdx.graphics.Color;
 import com.ecosystem.sim.entity.Herbivore;
 import com.ecosystem.sim.map.MapManager;
+import com.ecosystem.sim.util.EntityManager;
 
 /**
  * Lớp Voi (Elephant) - Động vật ăn cỏ (kích thước 12x12)
@@ -43,20 +44,12 @@ public class Elephant extends Herbivore {
     }
 
     @Override
-    public void reset() {
-        super.reset();
-    }
-
-    @Override
     public void cloneSelf() {
-        com.ecosystem.sim.util.EntityManager em = com.ecosystem.sim.util.EntityManager.getInstance();
+        EntityManager em = EntityManager.getInstance();
         if (em != null) {
             em.spawnElephant(position.x, position.y);
         }
     }
 
-    @Override
-    public void specificBehavior(float deltaTime) {
-        super.specificBehavior(deltaTime);
-    }
+
 }

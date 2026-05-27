@@ -17,7 +17,7 @@ public abstract class Animal extends Entity {
     protected float health;           // Máu (0-100)
     protected float energy;           // Năng lượng (0-100)
     protected float hydration;        // Độ ẩm (0-100)
-    protected float temperatureHeat;  // Độ nóng từ môi trường (0-100)
+
     
     // === THUỘC TÍNH THỂ CHẤT ===
     protected float speed;            // Tốc độ di chuyển (pixels/s)
@@ -75,7 +75,6 @@ public abstract class Animal extends Entity {
         this.maxEnergy = 100;
         this.hydration = 100;
         this.maxHydration = 100;
-        this.temperatureHeat = 0;
         
         // Khởi tạo các tham số mặc định
         this.hungerRate = 1.5f;    // Tốc độ đói
@@ -95,7 +94,7 @@ public abstract class Animal extends Entity {
         this.stuckTimer = 0f;
         
         // Khởi tạo velocity ngẫu nhiên để tránh kẹt ở (0, 0)
-        float randomAngle = com.badlogic.gdx.math.MathUtils.random(360);
+        float randomAngle = MathUtils.random(360);
         velocity = new Vector2(1, 0).setAngleDeg(randomAngle);
     }
 
@@ -105,7 +104,6 @@ public abstract class Animal extends Entity {
         this.health = maxHealth;
         this.energy = maxEnergy;
         this.hydration = maxHydration;
-        this.temperatureHeat = 0;
         
         this.currentState = AnimalState.WANDERING;
         this.previousState = null;
@@ -125,7 +123,7 @@ public abstract class Animal extends Entity {
         this.pathRecalcTimer = 0f;
         this.pathTargetPos.set(0, 0);
         
-        float randomAngle = com.badlogic.gdx.math.MathUtils.random(360);
+        float randomAngle = MathUtils.random(360);
         velocity.set(1, 0).setAngleDeg(randomAngle);
     }
 
@@ -224,9 +222,6 @@ public abstract class Animal extends Entity {
 
     protected void onStateChanged(AnimalState oldState, AnimalState newState) {}
 
-    /**
-     * Di chuyển động vật dựa trên trạng thái hiện tại
-     */
     /**
      * Di chuyển động vật dựa trên trạng thái hiện tại bằng A*
      */
@@ -429,18 +424,6 @@ public abstract class Animal extends Entity {
         return direction;
     }
 
-    protected Vector2 getSearchDirection(boolean searchWater) {
-        // TODO: Triển khai BFS/A* ở các phần sau để tìm tài nguyên thực sự
-        return getWanderingDirection();
-    }
-
-    protected Vector2 getDirectionToTarget(Vector2 target) {
-        Vector2 direction = new Vector2(target).sub(position);
-        if (direction.len() > 0) {
-            direction.nor();
-        }
-        return direction;
-    }
 
     protected boolean isObstructed(Vector2 newPos) {
         // Kiểm tra va chạm toàn diện qua kiểm tra đè ô gạch của mapManager
@@ -484,44 +467,10 @@ public abstract class Animal extends Entity {
         AnimalViewLogic.draw(shapeRenderer, position, width, height, color, isAlive);
     }
 
-    public void cloneSelf() {}
+    public abstract void cloneSelf();
 
     public abstract void specificBehavior(float deltaTime);
 
-    /**
-     * Tìm kiếm gạch nước gần nhất trong tầm nhìn
-     */
-    protected Vector2 findClosestTileTypeTarget(String type) {
-        int startTileX = (int)(position.x / 16);
-        int startTileY = (int)(position.y / 16);
-        int radiusTiles = (int)(senseRadius / 16);
-        
-        float closestDist = Float.MAX_VALUE;
-        Vector2 closestTarget = null;
-        
-        for (int dx = -radiusTiles; dx <= radiusTiles; dx++) {
-            for (int dy = -radiusTiles; dy <= radiusTiles; dy++) {
-                int tx = startTileX + dx;
-                int ty = startTileY + dy;
-                
-                if (tx >= 0 && tx < 50 && ty >= 0 && ty < 50) {
-                    boolean match = false;
-                    if (type.equals("water")) {
-                        match = mapManager.isWater(tx * 16 + 8, ty * 16 + 8);
-                    }
-                    
-                    if (match) {
-                        float dist = position.dst(tx * 16 + 8, ty * 16 + 8);
-                        if (dist < closestDist) {
-                            closestDist = dist;
-                            closestTarget = new Vector2(tx * 16 + 8, ty * 16 + 8);
-                        }
-                    }
-                }
-            }
-        }
-        return closestTarget;
-    }
 
     /**
      * Chọn vị trí đích lang thang ngẫu nhiên và an toàn trên đất cỏ

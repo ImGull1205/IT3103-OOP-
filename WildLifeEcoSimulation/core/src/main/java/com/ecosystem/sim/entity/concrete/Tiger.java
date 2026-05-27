@@ -5,6 +5,7 @@ import com.ecosystem.sim.entity.Animal;
 import com.ecosystem.sim.entity.AnimalState;
 import com.ecosystem.sim.entity.Carnivore;
 import com.ecosystem.sim.map.MapManager;
+import com.ecosystem.sim.util.EntityManager;
 
 /**
  * Lớp Hổ - Động vật ăn thịt mạnh nhất, kế thừa Carnivore
@@ -71,7 +72,7 @@ public class Tiger extends Carnivore {
 
     @Override
     public void cloneSelf() {
-        com.ecosystem.sim.util.EntityManager em = com.ecosystem.sim.util.EntityManager.getInstance();
+        EntityManager em = EntityManager.getInstance();
         if (em != null) {
             em.spawnTiger(position.x, position.y);
         }
