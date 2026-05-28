@@ -30,19 +30,6 @@ public class Rabbit extends Herbivore implements IPrey {//Lớp Thỏ - Động 
     }
 
     @Override
-    public void init(float x, float y) {
-        super.init(x, y);
-        this.threatDetected = null;
-        this.speed = 80f; // Tốc độ bình thường
-    }
-
-    @Override
-    public void reset() {
-        super.reset();
-        this.threatDetected = null;
-    }
-
-    @Override
     protected AnimalState makeDecision() {
         if (threatDetected != null && threatDetected.isAlive() && //priority cao nhất là chạy khi phát hiện threat
             position.dst(threatDetected.getPosition()) < fleeDistance) {
